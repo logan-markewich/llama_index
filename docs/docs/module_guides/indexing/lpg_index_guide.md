@@ -184,6 +184,25 @@ All retrievers currently include:
 - `CypherTemplateRetriever` - use a cypher template with params inferred by the LLM
 - `CustomPGRetriever` - easy to subclass and implement custom retrieval logic
 
+Generally, you would define one or more of these sub-retrievers and pass them to the `PGRetriever`:
+
+```python
+from llama_index.core.indices.property_graph import (
+    PGRetriever,
+    VectorContextRetriever,
+    LLMSynonymRetriever,
+)
+
+sub_retrievers = [
+    VectorContextRetriever(index.property_graph_store, ...),
+    LLMSynonymRetriever(index.property_graph_store, ...),
+]
+
+retriever = PGRetriever(sub_retrievers=sub_retrievers)
+
+nodes = retriever.retrieve("<query>")
+```
+
 Read on below for more details on all retrievers.
 
 #### (default) `LLMSynonymRetriever`
@@ -238,7 +257,7 @@ If your graph store supports vectors, then you only need to manage that graph st
 ```python
 from llama_index.core.indices.property_graph import VectorContextRetriever
 
-vector_retriever = LPGVectorRetriever(
+vector_retriever = VectorContextRetriever(
     index.property_graph_store,
     # only needed when the graph store doesn't support vector queries
     # vector_store=index.vector_store,
@@ -373,7 +392,7 @@ This example shows how you might save/load a property graph index using Neo4j an
 ```python
 from llama_index.core import StorageContext, load_index_from_storage
 from llama_index.core.indices import PropertyGraphIndex
-from llama_index.graph_stores.neo4j import Neo4jLPGStore
+from llama_index.graph_stores.neo4j import Neo4jPGStore
 from llama_index.vector_stores.qdrant import QdrantVectorStore
 from qdrant_client import QdrantClient, AsyncQdrantClient
 
@@ -383,12 +402,17 @@ vector_store = QdrantVectorStore(
     aclient=AsyncQdrantClient(...),
 )
 
-graph_store = Neo4jLPGStore(...)
+graph_store = Neo4jPGStore(
+    username="neo4j",
+    password="<password>",
+    url="bolt://localhost:7687",
+)
 
 # creates an index
 index = PropertyGraphIndex.from_documents(
     documents,
     property_graph_store=graph_store,
+    # optional, neo4j also supports vectors directly
     vector_store=vector_store,
     embed_kg_nodes=True,
 )
@@ -396,12 +420,13 @@ index = PropertyGraphIndex.from_documents(
 # load from existing graph/vector store
 index = PropertyGraphIndex.from_existing(
     property_graph_store=graph_store,
+    # optional, neo4j also supports vectors directly
     vector_store=vector_store,
     embed_kg_nodes=True,
 )
 ```
 
-### Using the LPG Graph Store Directly
+### Using the Property Graph Store Directly
 
 The base storage class for property graphs is the `PropertyGraphStore`. These property graph stores are constructured using different types of `LabeledNode` objects, and connected using `Relation` objects.
 
@@ -523,8 +548,8 @@ class MyGraphExtractor(TransformComponent):
 
             # add back to the metadata
 
-            llama_node.metadata["nodes"] = existing_nodes
-            llama_node.metadata["relations"] = existing_relations
+            llama_node.metadata[KG_NODES_KEY] = existing_nodes
+            llama_node.metadata[KG_RELATIONS_KEY] = existing_relations
 
         return llama_nodes
 
@@ -537,18 +562,28 @@ class MyGraphExtractor(TransformComponent):
 
 The retriever is a bit more complicated than the extractors, and has it's own special class to help make sub-classing easier.
 
+The return type of the retrieval is extremely flexible. It could be
+- a string
+- a `TextNode`
+- a `NodeWithScore`
+- a list of one of the above
+
 Here is a small example of sub-classing to create a custom retriever:
 
 ```python
-from llama_index.core.indices.property_graph import CustomPGRetriever
+from llama_index.core.indices.property_graph import (
+    CustomPGRetriever,
+    CUSTOM_RETRIEVE_TYPE,
+)
 
 
 class MyCustomRetriever(CustomPGRetriever):
-    def init(my_option_1: bool = False, **kwargs) -> None:
+    def init(self, my_option_1: bool = False, **kwargs) -> None:
         """Uses any kwargs passed in from class constructor."""
         self.my_option_1 = my_option_1
+        # optionally do something with self.graph_store
 
-    def custom_retrieve(self, query_str: str) -> str:
+    def custom_retrieve(self, query_str: str) -> CUSTOM_RETRIEVE_TYPE:
         # some some operation with self.graph_store
         return "result"
 
