@@ -78,13 +78,6 @@ __all__ = [
     "RouterRetriever",
     "BM25Retriever",
     "QueryFusionRetriever",
-    # property graph
-    "PGRetriever",
-    "CustomPGRetriever",
-    "LLMSynonymRetriever",
-    "CypherTemplateRetriever",
-    "TextToCypherRetriever",
-    "VectorContextRetriever",
     # SQL
     "SQLRetriever",
     "NLSQLRetriever",
